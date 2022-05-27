@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>nanojobs list</title>
+    <!-- <base href="/"> -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        .fullwidth {
+            width: 100%;
+        }
+
+        .tocenter {
+            text-align: center;
+        }
+
+        .jobtask {
+            border: 1px solid grey;
+            max-width: 90%;
+            min-width: 50%;
+            padding: 10px;
+            width: auto;
+            margin-bottom: 25px;
+            border-radius: 15px;
+        }
+
+        .jobtask-container {
+            width: 95%;
+            align-items: center;
+            margin-left: 5%;
+        }
+
+        .loading {
+            width: 100%;
+            text-align: center;
+            font-size: x-large;
+        }
+
+        .connect {
+            font-size: x-large;
+            border: 2px solid grey;
+            border-radius: 50px;
+            padding: 10px;
+            margin-top: 50px;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="fullwidth tocenter">
+        <img src="res/jobs_crying_blood.jpeg" style="width: 30%;max-width: 300px;" />
+        <br>
+        <h1>
+            Public Task List
+        </h1>
+        <span class="connect hidden" onclick="__app__.connect()">
+            CONNECT WALLET
+        </span>
+    </div>
+    <div class="loading">
+        Loading...
+    </div>
+
+
+
+    <div class="jobtask-container hidden">
+
+    </div>
+    <script>
+        window.__app__ = {};
+        const _ipfsGateway = "https://gw.crustapps.net";
+
+        const _contractAddress = "0xF7eCE417F87dC79224F96a12d41f1dbF03D93d94";
+        const _duplicateSolutionAdress = "0x53c9579a1bA43E4c220338b5AD5CCFd3b3C9F8ac";
+        var _contractAbi = "";
+
+        function AddNanojobToList(job) {
+            var jobItem = document.createElement("div");
+            jobItem.classList.add("jobtask");
+            jobItem.innerHTML = "<h2> #" + job.id + " - " + job.title + "</h2><p>" + job.description + "</p> <a href='"+job.uri+"' target='_blank'><button>Open job</button></a> <button onclick='SubmitSolution("+job.id+")'>Submit solution</button>";
+            document.querySelector(".jobtask-container").appendChild(jobItem);
+        }
+
+        async function SubmitSolution(idJob){
+            var solutionHash=prompt("Enter IPFS Hash (CIDv0):","");
+            if (solutionHash!=null){
+                var resp = await __app__.cnanojobs.methods.addJobSolution(idJob,solutionHash).send({from:__app__.connectedAddress});
+                console.log(resp);
+            }
+            
+        }
+
+        async function LoadNanojobsData() {
+
+            __app__.loading = true;
+
+            var abiData = await (await fetch("abis/nanojobs_contract.abi")).json();
+
+            __app__.cnanojobs = new __app__.web3.eth.Contract(abiData, _contractAddress);
+
+            var waitingJobs = await __app__.cnanojobs.methods.getWaitingJobs().call();
+            console.log("Waiting list:");
+            waitingJobs = waitingJobs.slice().sort((a, b) => a - b);
+            console.log(waitingJobs);
+
+            await waitingJobs.forEach(async (idJob) => {
+                var job = await __app__.cnanojobs.methods.getNanojob(idJob).call();
+
+                if (job.solutions && job.solutions.length < job.maxsolutions) {
+                    var jobObj = null
+                    try {
+                        jobObj = await (await fetch(_ipfsGateway + "/ipfs/" + job.jobdata + "/nanojobs_manifest.json")).json();
+                    } catch (error) {
+                        jobObj = JSON.parse(`{
+                        "title": "Task without title",
+                        "description": "-",
+                        "reward_description": "-",
+                        "reward": 0,
+                        "coin": "-",
+                        "owner": "-"
+                    }`);
+                    }
+                    jobObj.id = idJob;
+                    if (!jobObj.uri) jobObj.uri = _ipfsGateway + "/ipfs/" + job.jobdata;
+
+                    AddNanojobToList(jobObj);
+                }
+
+
+            });
+
+            __app__.dataLoaded = true;
+            __app__.loading = false;
+
+            console.log("LoadNanojobsData OK")
+        }
+
+        function OnWeb3Loaded() {
+            __app__.web3 = new Web3(Web3.givenProvider || "ws://localhost:8545");
+            __app__.connect = async function () {
+                const accounts = await __app__.web3.eth.requestAccounts();
+                if (accounts && accounts.length && accounts.length > 0) {
+                    __app__.connectionStatus = true;
+                    __app__.connectedAddress = accounts[0];
+                    __app__.web3.eth.defaultAccount = accounts[0];
+                }; return (accounts && accounts.length > 0)
+            }
+
+
+
+            __app__.loading = false;
+
+            setInterval(() => {
+                if (__app__.loading) {
+                    document.querySelector(".loading").classList.remove(["hidden"]);
+                } else {
+                    document.querySelector(".loading").classList.add(["hidden"]);
+                }
+
+                try {
+                    if (__app__.web3.currentProvider.selectedAddress == null) {
+                        __app__.connectionStatus = false;
+                        __app__.connectedAddress = null;
+                        __app__.web3.eth.defaultAccount = null;
+                    } else {
+                        __app__.connectionStatus = true;
+                        __app__.connectedAddress = __app__.web3.currentProvider.selectedAddress;
+                        __app__.web3.eth.defaultAccount = __app__.web3.currentProvider.selectedAddress;
+                    }
+                } catch (error) {
+                    console.log(error);
+                }
+
+
+                if (!__app__.connectionStatus) {
+                    document.querySelector(".connect").classList.remove(["hidden"]);
+                    document.querySelector(".jobtask-container").classList.add(["hidden"]);
+                } else {
+                    document.querySelector(".connect").classList.add(["hidden"]);
+                    document.querySelector(".jobtask-container").classList.remove(["hidden"]);
+                }
+
+                if (__app__.connectionStatus && !__app__.dataLoaded && !__app__.loading) {
+                    LoadNanojobsData();
+                }
+            }, 1000);
+        }
+    </script>
+
+    <script onload="OnWeb3Loaded()" defer src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.7.4-rc.0/web3.min.js"
+        integrity="sha512-RGPKVfQewHGfk9yaB7ThGPKAQU+civS5awsfStLg22jrWbqgDkNzPtIwNFpFApr3ccjB730SRxi+KnDjhIuTpw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+</body>
+
+</html>
