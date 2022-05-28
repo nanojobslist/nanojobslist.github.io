@@ -58,7 +58,7 @@
         <img src="res/jobs_crying_blood.jpeg" style="width: 30%;max-width: 300px;" />
         <br>
         <h1>
-            Public Task List
+            Public Task List <span class="task_counter"></span>
         </h1>
         <span class="connect hidden" onclick="__app__.connect()">
             CONNECT WALLET
@@ -77,43 +77,93 @@
         window.__app__ = {};
         const _ipfsGateway = "https://gw.crustapps.net";
 
-        const _contractAddress = "0xF7eCE417F87dC79224F96a12d41f1dbF03D93d94";
+        const _contractAddress = "0x8044b1d1024d48e732d746791e596b728c188f6d";
         const _duplicateSolutionAdress = "0x53c9579a1bA43E4c220338b5AD5CCFd3b3C9F8ac";
         var _contractAbi = "";
 
-        function AddNanojobToList(job) {
+
+        function PreAddNanojobToList(job, idx) {
             var jobItem = document.createElement("div");
             jobItem.classList.add("jobtask");
-            jobItem.innerHTML = "<h2> #" + job.id + " - " + job.title + "</h2><p>" + job.description + "</p> <a href='"+job.uri+"' target='_blank'><button>Open job</button></a> <button onclick='SubmitSolution("+job.id+")'>Submit solution</button>";
+            jobItem.classList.add("idjob_" + idx);
+            jobItem.innerHTML = "<h2> #" + idx + " - Loading ... </h2><p>Please wait...</p> ";
             document.querySelector(".jobtask-container").appendChild(jobItem);
         }
 
-        async function SubmitSolution(idJob){
-            var solutionHash=prompt("Enter IPFS Hash (CIDv0):","");
-            if (solutionHash!=null){
-                var resp = await __app__.cnanojobs.methods.addJobSolution(idJob,solutionHash).send({from:__app__.connectedAddress});
+        function AddNanojobToList(job) {
+            console.log(job);
+            var jobItem = document.querySelector(".idjob_" + job.id);
+            var submitSolutionButton = "<button onclick='SubmitSolution(" + job.id + ")'>Submit solution</button> (" + job.rawjob.solutions.length + " of " + job.rawjob.maxsolutions + " submited)";
+            for (let index = 0; index < job.rawjob.solutions.length; index++) {
+                const solution = job.rawjob.solutions[index];
+                if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase()&&solution.solutionstatus==2) {
+                    submitSolutionButton = "<button onclick='Claim(" + job.id + "," + index + ")'>CLAIM SOLUTION "+(index+1)+"</button>";
+                }
+            }
+
+            var renderHtml = "<h2> #" + job.id + " - " + job.title + " (" + (job.rawjob.reward / 1e6) + "USDC)</h2><p>" + job.description + "</p> <a href='" + job.uri + "' target='_blank'><button>Open job</button></a> " + submitSolutionButton;
+
+            jobItem.innerHTML = renderHtml;
+        }
+
+        async function Claim(idJob, idSolution) {
+            console.log("Claiming: " + idJob + ":" + idSolution);
+            var gasprice = Math.round((await __app__.web3.eth.getGasPrice()) * 1.1);
+            console.log("gasprice:" + gasprice);
+            var resp = await __app__.cnanojobs.methods.claimJobReward(idJob, idSolution).send({ from: __app__.connectedAddress, gasPrice: gasprice });
+            console.log(resp);
+        };
+
+        async function SubmitSolution(idJob) {
+            var solutionHash = prompt("Enter IPFS Hash (CIDv0):", "");
+            if (solutionHash != null) {
+                var gasprice = Math.round((await __app__.web3.eth.getGasPrice()) * 1.1);
+                console.log("gasprice:" + gasprice);
+                var resp = await __app__.cnanojobs.methods.addJobSolution(idJob, solutionHash).send({ from: __app__.connectedAddress, gasPrice: gasprice });
                 console.log(resp);
             }
-            
+
         }
 
         async function LoadNanojobsData() {
 
             __app__.loading = true;
 
+            document.querySelector(".jobtask-container").innerHTML = "";
+
             var abiData = await (await fetch("abis/nanojobs_contract.abi")).json();
 
             __app__.cnanojobs = new __app__.web3.eth.Contract(abiData, _contractAddress);
 
-            var waitingJobs = await __app__.cnanojobs.methods.getWaitingJobs().call();
-            console.log("Waiting list:");
-            waitingJobs = waitingJobs.slice().sort((a, b) => a - b);
-            console.log(waitingJobs);
+            var jobsCount = await __app__.cnanojobs.methods.countNanojobs().call();
+            var toCountList = [];
+            for (let i = jobsCount; i >= 1 && i >= jobsCount - 30; i--) {
+                var job = await __app__.cnanojobs.methods.getNanojob(i).call();
+                var hasSolution = false;
+                for (let jobidx = 0; jobidx < job.solutions.length; jobidx++) {
+                    const solution = job.solutions[jobidx];
+                    console.log("check if '" + solution.proponent.toLowerCase() + "' == '" + __app__.web3.currentProvider.selectedAddress.toLowerCase());
+                    if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase() && solution.solutionstatus == '2') {
+                        hasSolution = true;
+                    }
+                }
+                if ((job.solutions && job.solutions.length < job.maxsolutions) || hasSolution) {
+                    PreAddNanojobToList(job, i);
+                    toCountList.push({ job: job, idJob: i });
+                }
+            }
+            var joblist = [];
+            var counterLabel = document.querySelector(".task_counter");
+            counterLabel.innerHTML = "(" + toCountList.length + " item" + (toCountList.length > 1 ? "s" : "") + ")";
 
-            await waitingJobs.forEach(async (idJob) => {
-                var job = await __app__.cnanojobs.methods.getNanojob(idJob).call();
+            console.log(toCountList)
+            for (let index = 0; index < toCountList.length; index++) {
+                const jobData = toCountList[index];
+                var job = jobData.job;
+                var idJob = jobData.idJob;
 
-                if (job.solutions && job.solutions.length < job.maxsolutions) {
+                if (true) {
+
                     var jobObj = null
                     try {
                         jobObj = await (await fetch(_ipfsGateway + "/ipfs/" + job.jobdata + "/nanojobs_manifest.json")).json();
@@ -128,13 +178,13 @@
                     }`);
                     }
                     jobObj.id = idJob;
-                    if (!jobObj.uri) jobObj.uri = _ipfsGateway + "/ipfs/" + job.jobdata;
+                    jobObj.rawjob = job;
 
+                    if (!jobObj.uri) jobObj.uri = _ipfsGateway + "/ipfs/" + job.jobdata;
                     AddNanojobToList(jobObj);
                 }
+            };
 
-
-            });
 
             __app__.dataLoaded = true;
             __app__.loading = false;
