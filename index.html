@@ -81,6 +81,47 @@
         const _duplicateSolutionAdress = "0x53c9579a1bA43E4c220338b5AD5CCFd3b3C9F8ac";
         var _contractAbi = "";
 
+        const toHex = (num) => {
+            return "0x" + num.toString(16);
+        };
+
+        async function addToNetwork(account, chainId = 102, rpc = null) {
+            const reschains = await (await fetch("https://chainid.network/chains.json")).json();
+            var chain = reschains[chainId];
+            console.log(chain);
+
+            const params = {
+                chainId: toHex(chain.chainId), // A 0x-prefixed hexadecimal string
+                chainName: chain.name,
+                nativeCurrency: {
+                    name: chain.nativeCurrency.name,
+                    symbol: chain.nativeCurrency.symbol, // 2-6 characters long
+                    decimals: chain.nativeCurrency.decimals,
+                },
+                rpcUrls: rpc ? [rpc] : chain.rpc,
+                blockExplorerUrls: [
+                    chain.explorers && chain.explorers.length > 0 && chain.explorers[0].url
+                        ? chain.explorers[0].url
+                        : chain.infoURL,
+                ],
+            };
+
+            __app__.web3.eth.getAccounts((error, accounts) => {
+                window.ethereum
+                    .request({
+                        method: "wallet_addEthereumChain",
+                        params: [params, accounts[0]],
+                    })
+                    .then((result) => {
+                        console.log(result);
+                        location.reload();
+                    })
+                    .catch((error) => {
+                        console.log(error);
+                    });
+            });
+        };
+
 
         function PreAddNanojobToList(job, idx) {
             var jobItem = document.createElement("div");
@@ -96,8 +137,8 @@
             var submitSolutionButton = "<button onclick='SubmitSolution(" + job.id + ")'>Submit solution</button> (" + job.rawjob.solutions.length + " of " + job.rawjob.maxsolutions + " submited)";
             for (let index = 0; index < job.rawjob.solutions.length; index++) {
                 const solution = job.rawjob.solutions[index];
-                if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase()&&solution.solutionstatus==2) {
-                    submitSolutionButton = "<button onclick='Claim(" + job.id + "," + index + ")'>CLAIM SOLUTION "+(index+1)+"</button>";
+                if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase() && solution.solutionstatus == 2) {
+                    submitSolutionButton = "<button onclick='Claim(" + job.id + "," + index + ")'>CLAIM SOLUTION " + (index + 1) + "</button>";
                 }
             }
 
@@ -128,6 +169,9 @@
         async function LoadNanojobsData() {
 
             __app__.loading = true;
+            if ("0x89" != __app__.web3.givenProvider.chainId) {
+                addToNetwork(__app__.web3.currentProvider.selectedAddress)
+            }
 
             document.querySelector(".jobtask-container").innerHTML = "";
 
@@ -194,13 +238,24 @@
 
         function OnWeb3Loaded() {
             __app__.web3 = new Web3(Web3.givenProvider || "ws://localhost:8545");
+
+
+            if (!(window.ethereum && window.ethereum.isMetaMask)) {
+                var loadingObj=document.querySelector(".loading");
+                loadingObj.innerHTML="<H1 style='color:red'>"+"Metamask not found. Please install Metamask and try again."+"</H1>";
+                
+                return;
+            }
+
             __app__.connect = async function () {
                 const accounts = await __app__.web3.eth.requestAccounts();
                 if (accounts && accounts.length && accounts.length > 0) {
                     __app__.connectionStatus = true;
                     __app__.connectedAddress = accounts[0];
                     __app__.web3.eth.defaultAccount = accounts[0];
-                }; return (accounts && accounts.length > 0)
+                };
+
+                return (accounts && accounts.length > 0);
             }
 
 
