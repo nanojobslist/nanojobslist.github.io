@@ -173,6 +173,8 @@
                 addToNetwork(__app__.web3.currentProvider.selectedAddress)
             }
 
+            console.log(_contractAddress);
+
             document.querySelector(".jobtask-container").innerHTML = "";
 
             var abiData = await (await fetch("abis/nanojobs_contract.abi")).json();
@@ -183,10 +185,10 @@
             var toCountList = [];
             for (let i = jobsCount; i >= 1 && i >= jobsCount - 30; i--) {
                 var job = await __app__.cnanojobs.methods.getNanojob(i).call();
+                console.log(job);
                 var hasSolution = false;
                 for (let jobidx = 0; jobidx < job.solutions.length; jobidx++) {
                     const solution = job.solutions[jobidx];
-                    console.log("check if '" + solution.proponent.toLowerCase() + "' == '" + __app__.web3.currentProvider.selectedAddress.toLowerCase());
                     if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase() && solution.solutionstatus == '2') {
                         hasSolution = true;
                     }
