@@ -8,6 +8,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
+        body {
+            background-image: url(res/nanoworkers.png);
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: center;
+        }
+
         .fullwidth {
             width: 100%;
         }
@@ -24,6 +31,7 @@
             width: auto;
             margin-bottom: 25px;
             border-radius: 15px;
+            background-color: rgba(255,255,255,0.8);
         }
 
         .jobtask-container {
@@ -75,7 +83,7 @@
     </div>
     <script>
         window.__app__ = {};
-        const _ipfsGateway = "https://gw.crustapps.net";
+        const _ipfsGateway = "https://crustipfs.info";
 
         const _contractAddress = "0x8044b1d1024d48e732d746791e596b728c188f6d";
         const _duplicateSolutionAdress = "0x53c9579a1bA43E4c220338b5AD5CCFd3b3C9F8ac";
@@ -173,8 +181,6 @@
                 addToNetwork(__app__.web3.currentProvider.selectedAddress)
             }
 
-            console.log(_contractAddress);
-
             document.querySelector(".jobtask-container").innerHTML = "";
 
             var abiData = await (await fetch("abis/nanojobs_contract.abi")).json();
@@ -185,10 +191,10 @@
             var toCountList = [];
             for (let i = jobsCount; i >= 1 && i >= jobsCount - 30; i--) {
                 var job = await __app__.cnanojobs.methods.getNanojob(i).call();
-                console.log(job);
                 var hasSolution = false;
                 for (let jobidx = 0; jobidx < job.solutions.length; jobidx++) {
                     const solution = job.solutions[jobidx];
+                    console.log("check if '" + solution.proponent.toLowerCase() + "' == '" + __app__.web3.currentProvider.selectedAddress.toLowerCase());
                     if (solution.proponent.toLowerCase() == __app__.web3.currentProvider.selectedAddress.toLowerCase() && solution.solutionstatus == '2') {
                         hasSolution = true;
                     }
